@@ -1,4 +1,7 @@
-"""Registry of bank statement extractors."""
+"""Registry of bank statement extractors.
+
+Keep bank IDs and registration in sync with src/web/banks/registry.js.
+"""
 
 from __future__ import annotations
 

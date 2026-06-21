@@ -4,7 +4,7 @@ Extract structured credit card transactions from bank statement PDFs. Parsing us
 
 **Live demo:** [mark05e.github.io/bankstatement-liteparse](https://mark05e.github.io/bankstatement-liteparse/)
 
-**Currently supported:** TD credit card statements (`td_credit`). The codebase is modular so additional banks can be added under `src/banks/` and `src/web/banks/`.
+**Currently supported:** TD credit card statements (`td_credit`). The codebase is modular so additional banks can be added under `src/python/banks/` and `src/web/banks/`.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ pip install liteparse
 From the project root:
 
 ```bash
-python src/extract_transactions.py path/to/statement.pdf
+python src/python/extract_transactions.py path/to/statement.pdf
 ```
 
 This auto-detects the bank, parses the PDF, and writes two files next to the input (or use `--json` / `--csv` to set paths):
@@ -39,31 +39,31 @@ This auto-detects the bank, parses the PDF, and writes two files next to the inp
 Auto-detect bank from statement content:
 
 ```bash
-python src/extract_transactions.py statement.pdf
+python src/python/extract_transactions.py statement.pdf
 ```
 
 Specify the bank explicitly:
 
 ```bash
-python src/extract_transactions.py statement.pdf --bank td_credit
+python src/python/extract_transactions.py statement.pdf --bank td_credit
 ```
 
 Custom output paths:
 
 ```bash
-python src/extract_transactions.py statement.pdf --json out/transactions.json --csv out/transactions.csv
+python src/python/extract_transactions.py statement.pdf --json out/transactions.json --csv out/transactions.csv
 ```
 
 Re-run extraction from an existing LiteParse JSON file (skip PDF parsing):
 
 ```bash
-python src/extract_transactions.py tmp/liteparse-output-nov2024.json
+python src/python/extract_transactions.py tmp/liteparse-output-nov2024.json
 ```
 
 Show LiteParse progress while parsing:
 
 ```bash
-python src/extract_transactions.py statement.pdf --verbose
+python src/python/extract_transactions.py statement.pdf --verbose
 ```
 
 ### CLI options
@@ -147,24 +147,25 @@ This compares JS output against `tmp/*.transactions.json` files produced by the 
 
 ```
 src/
-  extract_transactions.py   # Python CLI entry point
-  common/                   # Shared types, dates, clustering, output, PDF loading
-  banks/
-    base.py                 # BankExtractor interface
-    td_credit.py            # TD credit card extractor
-    registry.py             # Bank registration and auto-detection
+  python/
+    extract_transactions.py # Python CLI entry point
+    common/                 # Shared types, dates, clustering, output, PDF loading
+    banks/
+      base.py               # BankExtractor interface
+      td_credit.py          # TD credit card extractor
+      registry.py           # Bank registration and auto-detection
   web/
     index.html              # Browser UI
     extract_transactions.js # JS entry point and re-exports
     common/                 # Shared JS utilities
     banks/                  # Bank-specific JS extractors
-    validate_parity.mjs       # Parity test script
+    validate_parity.mjs     # Parity test script
 ```
 
 ## Adding a new bank
 
-1. Implement `BankExtractor` in `src/banks/your_bank.py` (`detect`, `extract_meta`, `extract_transactions`).
-2. Register it in `src/banks/registry.py`.
+1. Implement `BankExtractor` in `src/python/banks/your_bank.py` (`detect`, `extract_meta`, `extract_transactions`).
+2. Register it in `src/python/banks/registry.py`.
 3. Port the same logic to `src/web/banks/your_bank.js` and register in `src/web/banks/registry.js`.
 
-Shared logic (date normalization, row clustering, amount parsing, output formatting) lives in `common/` and should be reused rather than duplicated in each bank module.
+Shared logic (date normalization, row clustering, amount parsing, output formatting) lives in each tree's `common/` folder and should be reused rather than duplicated in each bank module.

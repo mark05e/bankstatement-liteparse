@@ -7,7 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
-# Allow imports from src/ when run as a script.
+# Allow imports from src/python/ when run as a script.
 _SRC_DIR = Path(__file__).resolve().parent
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
