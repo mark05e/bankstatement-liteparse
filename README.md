@@ -88,10 +88,15 @@ ES modules and WASM require HTTP — `file://` URLs will not work.
 
 ```bash
 cd src/web
+echo "Open http://localhost:8080"
 python -m http.server 8080
 ```
 
-Open [http://localhost:8080](http://localhost:8080) in your browser.
+One-liner:
+
+```bash
+cd src/web && echo "Open http://localhost:8080" && python -m http.server 8080
+```
 
 ### Use the UI
 
