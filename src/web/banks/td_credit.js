@@ -18,12 +18,12 @@ const STATEMENT_PERIOD_RE =
 const ACCOUNT_RE = /(\d{4}\s+\d{2}XX\s+XXXX\s+\d{4})/;
 const AMOUNT_RE = /^-?\$[\d,]+\.\d{2}$/;
 
-const COLUMNS = {
-  txn_date: [40, 85],
-  post_date: [85, 130],
-  description: [130, 300],
-  amount: [300, 360],
-};
+const COLUMNS = [
+  ["txn_date", 40, 85],
+  ["post_date", 85, 130],
+  ["description", 130, 300],
+  ["amount", 300, 360],
+];
 const LEFT_PANEL_MAX_X = 360;
 const ROW_CLUSTER_TOLERANCE = 6.0;
 const MAX_DESCRIPTION_GAP = 35.0;
@@ -99,9 +99,7 @@ export const tdCreditExtractor = {
       if (!(page.text || "").includes(TRANSACTION_PAGE_MARKER)) continue;
 
       const leftItems = (page.text_items || []).filter((item) => item.x < LEFT_PANEL_MAX_X);
-      for (const cluster of clusterRows(leftItems, ROW_CLUSTER_TOLERANCE).sort(
-        (a, b) => a.y_ref - b.y_ref,
-      )) {
+      for (const cluster of clusterRows(leftItems, ROW_CLUSTER_TOLERANCE)) {
         const fields = rowFields(cluster, COLUMNS);
         const txnRaw = fields.txn_date;
         const postRaw = fields.post_date;

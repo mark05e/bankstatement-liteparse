@@ -1,23 +1,12 @@
 /**
  * Bank statement transaction extraction from liteparse page data.
- * Re-exports TD extractor functions for backward compatibility.
+ * Use extract() as the single entry point.
  */
 
 import { buildOutput, toCsv } from "./common/output.js";
-import { tdCreditExtractor } from "./banks/td_credit.js";
 import { detectExtractor, getExtractor, listExtractors } from "./banks/registry.js";
 
 export { buildOutput, toCsv, detectExtractor, getExtractor, listExtractors };
-
-/** @deprecated Use getExtractor("td_credit") or detectExtractor() */
-export function extractMeta(pages) {
-  return tdCreditExtractor.extractMeta(pages);
-}
-
-/** @deprecated Use getExtractor("td_credit") or detectExtractor() */
-export function extractTransactionsFromPages(pages, meta = null) {
-  return tdCreditExtractor.extractTransactions(pages, meta);
-}
 
 /**
  * Extract transactions using auto-detected or specified bank extractor.

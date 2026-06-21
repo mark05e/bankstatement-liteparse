@@ -4,11 +4,7 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  extractTransactionsFromPages,
-  extractMeta,
-  buildOutput,
-} from "./extract_transactions.js";
+import { extract } from "./extract_transactions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "../..");
@@ -38,9 +34,8 @@ for (const { liteparse, expected } of fixtures) {
   }
 
   const pages = data.pages;
-  const meta = extractMeta(pages);
-  const transactions = extractTransactionsFromPages(pages, meta);
-  const actual = buildOutput(transactions, meta, liteparsePath);
+  const { payload } = extract(pages);
+  const actual = { ...payload, source: liteparsePath };
 
   let expectedPayload;
   try {

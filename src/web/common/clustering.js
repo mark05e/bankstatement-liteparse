@@ -6,17 +6,19 @@ export function parseAmount(text) {
   return parseFloat(text.replace("$", "").replace(/,/g, ""));
 }
 
-export function columnForX(x, columns) {
-  for (const [name, [low, high]] of Object.entries(columns)) {
+/** @param {Array<[string, number, number]>} columnBands */
+export function columnForX(x, columnBands) {
+  for (const [name, low, high] of columnBands) {
     if (x >= low && x < high) return name;
   }
   return null;
 }
 
+/** Mutates items array order (y-sort). */
 export function clusterRows(items, tolerance = DEFAULT_ROW_CLUSTER_TOLERANCE) {
-  const sortedItems = [...items].sort((a, b) => a.y - b.y);
+  items.sort((a, b) => a.y - b.y);
   const clusters = [];
-  for (const item of sortedItems) {
+  for (const item of items) {
     let matched = false;
     for (const cluster of clusters) {
       if (Math.abs(item.y - cluster.y_ref) <= tolerance) {
@@ -32,11 +34,12 @@ export function clusterRows(items, tolerance = DEFAULT_ROW_CLUSTER_TOLERANCE) {
   return clusters;
 }
 
-export function rowFields(cluster, columns, mergeColumn = "description") {
-  const fields = Object.fromEntries(Object.keys(columns).map((name) => [name, null]));
+export function rowFields(cluster, columnBands, mergeColumn = "description") {
+  const fields = Object.fromEntries(columnBands.map(([name]) => [name, null]));
   const merged = [];
-  for (const item of [...cluster.items].sort((a, b) => a.x - b.x)) {
-    const column = columnForX(item.x, columns);
+  cluster.items.sort((a, b) => a.x - b.x);
+  for (const item of cluster.items) {
+    const column = columnForX(item.x, columnBands);
     const text = item.text.trim();
     if (!text || column === null) continue;
     if (column === mergeColumn) {
