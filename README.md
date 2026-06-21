@@ -2,6 +2,8 @@
 
 Extract structured credit card transactions from bank statement PDFs. Parsing uses [LiteParse](https://github.com/run-llama/liteparse) for spatial text extraction; bank-specific logic maps that text into transaction rows.
 
+**Live demo:** [mark05e.github.io/bankstatement-liteparse](https://mark05e.github.io/bankstatement-liteparse/)
+
 **Currently supported:** TD credit card statements (`td_credit`). The codebase is modular so additional banks can be added under `src/banks/` and `src/web/banks/`.
 
 ## Requirements
@@ -77,6 +79,8 @@ python src/extract_transactions.py statement.pdf --verbose
 ## Web UI
 
 The web app runs entirely in the browser: LiteParse WASM (loaded from CDN) parses the PDF, then JavaScript extractors produce the same JSON/CSV output as the Python CLI.
+
+**Try it online:** [https://mark05e.github.io/bankstatement-liteparse/](https://mark05e.github.io/bankstatement-liteparse/)
 
 ### Run locally
 
