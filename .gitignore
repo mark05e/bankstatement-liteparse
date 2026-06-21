@@ -2,3 +2,5 @@ tmp/
 repo/
 .specstory/
 specstory/
+.cursor/
+__pycache__/

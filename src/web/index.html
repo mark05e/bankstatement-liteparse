@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<!-- Serve locally: cd src/web && python -m http.server 8080  then open http://localhost:8080 -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bank Statement Transaction Extractor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black: #000000;
+      --off-white: #F5F5F5;
+      --light-grey: #E7E7E7;
+      --dark-grey: #737373;
+      --vibrant-blue: #37D7FA;
+      --mid-purple: #4B72FE;
+      --vibrant-pink: #FF8DF2;
+      --vibrant-orange: #FF8705;
+      --font-sans: system-ui, -apple-system, sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--off-white);
+      color: var(--black);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--black);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header h1 {
+      color: white;
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    header .badge {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      background: linear-gradient(135deg, var(--vibrant-blue), var(--mid-purple));
+      color: white;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .accent-line {
+      height: 3px;
+      background: linear-gradient(90deg, var(--vibrant-blue), var(--mid-purple), var(--vibrant-pink), var(--vibrant-orange));
+    }
+
+    main {
+      flex: 1;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .hero h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .hero p {
+      color: var(--dark-grey);
+      font-size: 0.95rem;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .drop-zone {
+      border: 2px dashed var(--light-grey);
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: white;
+      position: relative;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--mid-purple);
+      background: #f0f0ff;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .drop-zone-text {
+      font-size: 1rem;
+      color: var(--dark-grey);
+    }
+
+    .drop-zone-text strong { color: var(--mid-purple); }
+
+    #status {
+      text-align: center;
+      margin: 1rem 0;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--dark-grey);
+      min-height: 1.25rem;
+    }
+
+    #status.loading { color: var(--mid-purple); }
+    #status.success { color: #16a34a; }
+    #status.error { color: #dc2626; }
+
+    .results { display: none; }
+    .results.visible { display: block; }
+
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      background: white;
+      border: 1px solid var(--light-grey);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    .meta-bar .meta-item strong {
+      display: block;
+      color: var(--dark-grey);
+      font-weight: 400;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.15rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .controls button {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      padding: 0.4rem 0.85rem;
+      border: 1px solid var(--light-grey);
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .controls button:hover { background: var(--off-white); }
+    .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .controls .count {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--dark-grey);
+      margin-left: auto;
+    }
+
+    .table-wrap {
+      background: white;
+      border: 1px solid var(--light-grey);
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 480px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    th, td {
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--light-grey);
+      white-space: nowrap;
+    }
+
+    th {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--dark-grey);
+      background: var(--off-white);
+      position: sticky;
+      top: 0;
+    }
+
+    td.desc {
+      white-space: normal;
+      min-width: 220px;
+      max-width: 360px;
+    }
+
+    td.amount {
+      font-family: var(--font-mono);
+      text-align: right;
+    }
+
+    td.page {
+      font-family: var(--font-mono);
+      color: var(--dark-grey);
+      text-align: center;
+    }
+
+    .debug-section {
+      margin-top: 1.5rem;
+    }
+
+    .debug-toggle {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: none;
+      border: none;
+      color: var(--mid-purple);
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .debug-toggle:hover { text-decoration: underline; }
+
+    .debug-output {
+      display: none;
+      margin-top: 0.75rem;
+      background: var(--black);
+      color: #e0e0e0;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.5;
+      padding: 1rem;
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 300px;
+      white-space: pre;
+    }
+
+    .debug-output.visible { display: block; }
+
+    footer {
+      text-align: center;
+      padding: 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--dark-grey);
+      border-top: 1px solid var(--light-grey);
+    }
+
+    @media (max-width: 600px) {
+      main { padding: 1.25rem 1rem; }
+      .meta-bar { flex-direction: column; gap: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TD Statement Extractor</h1>
+    <span class="badge">WASM + JS</span>
+  </header>
+  <div class="accent-line"></div>
+
+  <main>
+    <div class="hero">
+      <h2>Extract TD Credit Card Transactions</h2>
+      <p>Drop a TD First Class Travel Card statement PDF. Parsing runs in-browser via LiteParse WASM; transaction extraction uses the same logic as the Python CLI.</p>
+    </div>
+
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="pdf-input" accept=".pdf" />
+      <div class="drop-zone-text">
+        Drop a PDF here or <strong>click to browse</strong>
+      </div>
+    </div>
+
+    <div id="status">Loading WASM module...</div>
+
+    <div class="results" id="results">
+      <div class="meta-bar" id="meta-bar"></div>
+
+      <div class="controls">
+        <button id="download-json" disabled>Download JSON</button>
+        <button id="download-csv" disabled>Download CSV</button>
+        <span class="count" id="txn-count"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Transaction Date</th>
+              <th>Posting Date</th>
+              <th>Description</th>
+              <th>Amount</th>
+              <th>Page</th>
+            </tr>
+          </thead>
+          <tbody id="txn-body"></tbody>
+        </table>
+      </div>
+
+      <div class="debug-section">
+        <button class="debug-toggle" id="debug-toggle" type="button">Show raw LiteParse JSON</button>
+        <pre class="debug-output" id="debug-output"></pre>
+      </div>
+    </div>
+  </main>
+
+  <footer>TD credit card supported &middot; LiteParse WASM @2.1</footer>
+
+  <script type="module">
+    import { extract, toCsv } from "./extract_transactions.js";
+
+    const status = document.getElementById("status");
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("pdf-input");
+    const results = document.getElementById("results");
+    const metaBar = document.getElementById("meta-bar");
+    const txnBody = document.getElementById("txn-body");
+    const txnCount = document.getElementById("txn-count");
+    const downloadJsonBtn = document.getElementById("download-json");
+    const downloadCsvBtn = document.getElementById("download-csv");
+    const debugToggle = document.getElementById("debug-toggle");
+    const debugOutput = document.getElementById("debug-output");
+
+    let LiteParse = null;
+    let currentPayload = null;
+    let currentCsv = null;
+    let currentRawResult = null;
+
+    function setStatus(msg, type) {
+      status.textContent = msg;
+      status.className = type || "";
+    }
+
+    function normalizeLiteParseResult(result) {
+      return result.pages.map((p) => ({
+        page: p.pageNum,
+        width: p.width,
+        height: p.height,
+        text: p.text,
+        text_items: p.textItems.map((item) => ({
+          text: item.text,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+        })),
+      }));
+    }
+
+    function renderMeta(payload) {
+      metaBar.innerHTML = [
+        metaItem("Account", payload.account_number || "—"),
+        metaItem("Statement Date", payload.statement_date || "—"),
+        metaItem("Period Start", payload.statement_period?.start || "—"),
+        metaItem("Period End", payload.statement_period?.end || "—"),
+        metaItem("Source", payload.source || "—"),
+      ].join("");
+    }
+
+    function metaItem(label, value) {
+      return `<div class="meta-item"><strong>${label}</strong>${escapeHtml(value)}</div>`;
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatAmount(amount) {
+      return new Intl.NumberFormat("en-CA", {
+        style: "currency",
+        currency: "CAD",
+      }).format(amount);
+    }
+
+    function renderTable(transactions) {
+      txnBody.innerHTML = transactions
+        .map(
+          (txn) => `<tr>
+            <td>${escapeHtml(txn.transaction_date)}</td>
+            <td>${escapeHtml(txn.posting_date)}</td>
+            <td class="desc">${escapeHtml(txn.description)}</td>
+            <td class="amount">${escapeHtml(formatAmount(txn.amount))}</td>
+            <td class="page">${txn.page}</td>
+          </tr>`
+        )
+        .join("");
+      txnCount.textContent = `${transactions.length} transaction${transactions.length === 1 ? "" : "s"}`;
+    }
+
+    function enableDownloads(payload, csv) {
+      currentPayload = payload;
+      currentCsv = csv;
+      downloadJsonBtn.disabled = false;
+      downloadCsvBtn.disabled = false;
+    }
+
+    function downloadBlob(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function processPdf(file) {
+      if (!LiteParse) {
+        setStatus("WASM module not loaded yet.", "error");
+        return;
+      }
+
+      const baseName = file.name.replace(/\.pdf$/i, "");
+      setStatus(`Parsing "${file.name}"...`, "loading");
+      results.classList.remove("visible");
+      debugOutput.classList.remove("visible");
+      debugToggle.textContent = "Show raw LiteParse JSON";
+      downloadJsonBtn.disabled = true;
+      downloadCsvBtn.disabled = true;
+
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const parser = new LiteParse({ ocrEnabled: false, outputFormat: "json", quiet: true });
+        const result = await parser.parse(bytes);
+        currentRawResult = result;
+
+        setStatus("Extracting transactions...", "loading");
+        const pages = normalizeLiteParseResult(result);
+        const { extractor, transactions, payload } = extract(pages);
+        payload.source = file.name;
+        const csv = toCsv(transactions);
+
+        renderMeta(payload);
+        renderTable(transactions);
+        enableDownloads(payload, csv);
+        debugOutput.textContent = JSON.stringify(result, null, 2);
+        results.classList.add("visible");
+        setStatus(
+          `Extracted ${transactions.length} transaction${transactions.length === 1 ? "" : "s"} (${extractor.name}) from ${result.pages.length} page(s)`,
+          "success",
+        );
+      } catch (err) {
+        setStatus("Error: " + err.message, "error");
+        console.error(err);
+      }
+    }
+
+    // --- Load WASM from CDN ---
+    try {
+      const mod = await import(
+        "https://cdn.jsdelivr.net/npm/@llamaindex/liteparse-wasm@2.1/pkg/liteparse_wasm.js"
+      );
+      await mod.default(
+        "https://cdn.jsdelivr.net/npm/@llamaindex/liteparse-wasm@2.1/pkg/liteparse_wasm_bg.wasm"
+      );
+      LiteParse = mod.LiteParse;
+      setStatus("Ready. Drop a bank statement PDF to extract transactions.", "success");
+    } catch (err) {
+      setStatus("Failed to load WASM module: " + err.message, "error");
+      console.error(err);
+    }
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      if (file && file.type === "application/pdf") {
+        processPdf(file);
+      } else {
+        setStatus("Please drop a PDF file.", "error");
+      }
+    });
+
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) processPdf(file);
+    });
+
+    downloadJsonBtn.addEventListener("click", () => {
+      if (!currentPayload) return;
+      const name = currentPayload.source.replace(/\.pdf$/i, ".transactions.json");
+      downloadBlob(JSON.stringify(currentPayload, null, 2) + "\n", name, "application/json");
+    });
+
+    downloadCsvBtn.addEventListener("click", () => {
+      if (!currentCsv) return;
+      const name = currentPayload.source.replace(/\.pdf$/i, ".transactions.csv");
+      downloadBlob(currentCsv, name, "text/csv");
+    });
+
+    debugToggle.addEventListener("click", () => {
+      const visible = debugOutput.classList.toggle("visible");
+      debugToggle.textContent = visible ? "Hide raw LiteParse JSON" : "Show raw LiteParse JSON";
+    });
+  </script>
+</body>
+</html>
