@@ -17,13 +17,15 @@ export const FULL_MONTHS = [
 ];
 export const MONTH_DAY_DATE_RE = new RegExp(`^(${MONTHS.join("|")})\\s+(\\d{1,2})$`, "i");
 
+const MONTH_TO_NUMBER = new Map([
+  ...MONTHS.map((m, i) => [m, i + 1]),
+  ...FULL_MONTHS.map((m, i) => [m, i + 1]),
+]);
+
 export function monthToNumber(monthName) {
-  const upper = monthName.toUpperCase();
-  const shortIdx = MONTHS.indexOf(upper);
-  if (shortIdx >= 0) return shortIdx + 1;
-  const fullIdx = FULL_MONTHS.indexOf(upper);
-  if (fullIdx >= 0) return fullIdx + 1;
-  throw new Error(`Unknown month: ${monthName}`);
+  const num = MONTH_TO_NUMBER.get(monthName.toUpperCase());
+  if (num === undefined) throw new Error(`Unknown month: ${monthName}`);
+  return num;
 }
 
 export function monthDayToIso(monthName, day, year) {

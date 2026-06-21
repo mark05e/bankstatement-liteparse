@@ -4,10 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bank Statement Transaction Extractor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <title>Bank Statement PDF Transactions Extractor</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -21,7 +19,7 @@
       --vibrant-pink: #FF8DF2;
       --vibrant-orange: #FF8705;
       --font-sans: system-ui, -apple-system, sans-serif;
-      --font-mono: 'IBM Plex Mono', monospace;
+      --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
     }
 
     body {
@@ -85,7 +83,18 @@
       color: var(--dark-grey);
       font-size: 0.95rem;
       max-width: 560px;
-      margin: 0 auto;
+      margin: 0 auto 0.5rem;
+    }
+
+    .hero .supported-banks {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+    }
+
+    .hero .supported-banks strong {
+      color: var(--black);
+      font-weight: 500;
     }
 
     .drop-zone {
@@ -287,21 +296,22 @@
 </head>
 <body>
   <header>
-    <h1>TD Statement Extractor</h1>
-    <span class="badge">WASM + JS</span>
+    <h1>Bank Statement PDF Transactions Extractor</h1>
+    <span class="badge">100% in-browser</span>
   </header>
   <div class="accent-line"></div>
 
   <main>
     <div class="hero">
-      <h2>Extract TD Credit Card Transactions</h2>
-      <p>Drop a TD First Class Travel Card statement PDF. Parsing runs in-browser via LiteParse WASM; transaction extraction uses the same logic as the Python CLI.</p>
+      <h2>Extract Transactions from Bank Statement PDFs</h2>
+      <p>Everything runs 100% in your browser — your PDF never leaves your device. Drop a statement to parse and extract Transactions.</p>
+      <p class="supported-banks"><strong>Supported banks:</strong> <span id="supported-banks-list"></span></p>
     </div>
 
     <div class="drop-zone" id="drop-zone">
       <input type="file" id="pdf-input" accept=".pdf" />
       <div class="drop-zone-text">
-        Drop a PDF here or <strong>click to browse</strong>
+        Drop a bank statement PDF to extract Transactions, or <strong>click to browse</strong>
       </div>
     </div>
 
@@ -311,8 +321,8 @@
       <div class="meta-bar" id="meta-bar"></div>
 
       <div class="controls">
-        <button id="download-json" disabled>Download JSON</button>
-        <button id="download-csv" disabled>Download CSV</button>
+        <button id="download-json" disabled>Download Transactions JSON</button>
+        <button id="download-csv" disabled>Download Transactions CSV</button>
         <span class="count" id="txn-count"></span>
       </div>
 
@@ -338,10 +348,19 @@
     </div>
   </main>
 
-  <footer>TD credit card supported &middot; LiteParse WASM @2.1</footer>
+  <footer>100% in-browser Transactions extraction &middot; mark05e &middot; LiteParse WASM @2.1</footer>
 
   <script type="module">
-    import { extract, toCsv } from "./extract_transactions.js";
+    import { extract, toCsv, listExtractors } from "./extract_transactions.js";
+    import { liteparseResultToPages } from "./common/liteparse.js";
+
+    const supportedBankNames = listExtractors().map((e) => e.name).join(", ");
+    document.getElementById("supported-banks-list").textContent = supportedBankNames;
+
+    const currencyFormatter = new Intl.NumberFormat("en-CA", {
+      style: "currency",
+      currency: "CAD",
+    });
 
     const status = document.getElementById("status");
     const dropZone = document.getElementById("drop-zone");
@@ -357,28 +376,47 @@
 
     let LiteParse = null;
     let currentPayload = null;
-    let currentCsv = null;
+    let currentTransactions = null;
     let currentRawResult = null;
+    let debugJsonRendered = false;
 
     function setStatus(msg, type) {
       status.textContent = msg;
       status.className = type || "";
     }
 
-    function normalizeLiteParseResult(result) {
-      return result.pages.map((p) => ({
-        page: p.pageNum,
-        width: p.width,
-        height: p.height,
-        text: p.text,
-        text_items: p.textItems.map((item) => ({
-          text: item.text,
-          x: item.x,
-          y: item.y,
-          width: item.width,
-          height: item.height,
-        })),
-      }));
+    function formatAmount(amount) {
+      return currencyFormatter.format(amount);
+    }
+
+    function appendCell(tr, text, className) {
+      const td = document.createElement("td");
+      if (className) td.className = className;
+      td.textContent = text;
+      tr.appendChild(td);
+    }
+
+    function renderTable(transactions) {
+      const fragment = document.createDocumentFragment();
+      for (const txn of transactions) {
+        const tr = document.createElement("tr");
+
+        appendCell(tr, txn.transaction_date);
+        appendCell(tr, txn.posting_date);
+        appendCell(tr, txn.description, "desc");
+        appendCell(tr, formatAmount(txn.amount), "amount");
+        appendCell(tr, String(txn.page), "page");
+
+        fragment.appendChild(tr);
+      }
+      txnBody.replaceChildren(fragment);
+      txnCount.textContent = `${transactions.length} transaction${transactions.length === 1 ? "" : "s"}`;
+    }
+
+    function enableDownloads(payload) {
+      currentPayload = payload;
+      downloadJsonBtn.disabled = false;
+      downloadCsvBtn.disabled = false;
     }
 
     function renderMeta(payload) {
@@ -403,35 +441,6 @@
         .replace(/"/g, "&quot;");
     }
 
-    function formatAmount(amount) {
-      return new Intl.NumberFormat("en-CA", {
-        style: "currency",
-        currency: "CAD",
-      }).format(amount);
-    }
-
-    function renderTable(transactions) {
-      txnBody.innerHTML = transactions
-        .map(
-          (txn) => `<tr>
-            <td>${escapeHtml(txn.transaction_date)}</td>
-            <td>${escapeHtml(txn.posting_date)}</td>
-            <td class="desc">${escapeHtml(txn.description)}</td>
-            <td class="amount">${escapeHtml(formatAmount(txn.amount))}</td>
-            <td class="page">${txn.page}</td>
-          </tr>`
-        )
-        .join("");
-      txnCount.textContent = `${transactions.length} transaction${transactions.length === 1 ? "" : "s"}`;
-    }
-
-    function enableDownloads(payload, csv) {
-      currentPayload = payload;
-      currentCsv = csv;
-      downloadJsonBtn.disabled = false;
-      downloadCsvBtn.disabled = false;
-    }
-
     function downloadBlob(content, filename, mimeType) {
       const blob = new Blob([content], { type: mimeType });
       const url = URL.createObjectURL(blob);
@@ -448,11 +457,12 @@
         return;
       }
 
-      const baseName = file.name.replace(/\.pdf$/i, "");
       setStatus(`Parsing "${file.name}"...`, "loading");
       results.classList.remove("visible");
       debugOutput.classList.remove("visible");
       debugToggle.textContent = "Show raw LiteParse JSON";
+      debugJsonRendered = false;
+      debugOutput.textContent = "";
       downloadJsonBtn.disabled = true;
       downloadCsvBtn.disabled = true;
 
@@ -462,16 +472,15 @@
         const result = await parser.parse(bytes);
         currentRawResult = result;
 
-        setStatus("Extracting transactions...", "loading");
-        const pages = normalizeLiteParseResult(result);
+        setStatus("Extracting Transactions...", "loading");
+        const pages = liteparseResultToPages(result);
         const { extractor, transactions, payload } = extract(pages);
         payload.source = file.name;
-        const csv = toCsv(transactions);
+        currentTransactions = transactions;
 
         renderMeta(payload);
         renderTable(transactions);
-        enableDownloads(payload, csv);
-        debugOutput.textContent = JSON.stringify(result, null, 2);
+        enableDownloads(payload);
         results.classList.add("visible");
         setStatus(
           `Extracted ${transactions.length} transaction${transactions.length === 1 ? "" : "s"} (${extractor.name}) from ${result.pages.length} page(s)`,
@@ -492,7 +501,7 @@
         "https://cdn.jsdelivr.net/npm/@llamaindex/liteparse-wasm@2.1/pkg/liteparse_wasm_bg.wasm"
       );
       LiteParse = mod.LiteParse;
-      setStatus("Ready. Drop a bank statement PDF to extract transactions.", "success");
+      setStatus("Ready. Drop a bank statement PDF to extract Transactions.", "success");
     } catch (err) {
       setStatus("Failed to load WASM module: " + err.message, "error");
       console.error(err);
@@ -530,13 +539,17 @@
     });
 
     downloadCsvBtn.addEventListener("click", () => {
-      if (!currentCsv) return;
+      if (!currentTransactions) return;
       const name = currentPayload.source.replace(/\.pdf$/i, ".transactions.csv");
-      downloadBlob(currentCsv, name, "text/csv");
+      downloadBlob(toCsv(currentTransactions), name, "text/csv");
     });
 
     debugToggle.addEventListener("click", () => {
       const visible = debugOutput.classList.toggle("visible");
+      if (visible && !debugJsonRendered && currentRawResult) {
+        debugOutput.textContent = JSON.stringify(currentRawResult, null, 2);
+        debugJsonRendered = true;
+      }
       debugToggle.textContent = visible ? "Hide raw LiteParse JSON" : "Show raw LiteParse JSON";
     });
   </script>
