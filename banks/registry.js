@@ -1,4 +1,4 @@
-/** Registry of bank statement extractors. */
+/** Registry of bank statement extractors. Keep in sync with src/python/banks/registry.py. */
 
 import { tdCreditExtractor } from "./td_credit.js";
 
