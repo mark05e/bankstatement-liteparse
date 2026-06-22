@@ -101,12 +101,16 @@ cd src/web && echo "Open http://localhost:8080" && python -m http.server 8080
 ### Use the UI
 
 1. Wait for the status line to show **Ready** (WASM loads from jsDelivr on first visit).
-2. Drop a statement PDF onto the drop zone, or click to choose a file.
-3. View statement metadata and the transaction table.
-4. Download **JSON** or **CSV** with the download buttons.
-5. Optionally expand **Show raw LiteParse JSON** for debugging.
+2. Drop one or more statement PDFs onto the drop zone, or click to choose files.
+3. Watch the progress bar and file queue as each PDF is parsed sequentially.
+4. Click a completed file in the queue to view its metadata and transaction table.
+5. Download **JSON** or **CSV** for the currently selected file.
+6. After a batch finishes, use **Download all JSON (ZIP)** or **Download all CSV (ZIP)** to export every successful file at once.
+7. Optionally expand **Show raw LiteParse JSON** for debugging.
 
-The status line reports which bank extractor was detected (e.g. `TD Credit Card`).
+Non-PDF files in a drop are skipped with a warning. If one PDF in a batch fails, the rest still process; failed files show an error badge in the queue and are omitted from ZIP downloads.
+
+The status line reports batch completion and which bank extractor was detected (e.g. `TD Credit Card`).
 
 ## Output format
 
@@ -162,7 +166,7 @@ src/
   web/
     index.html              # Browser UI
     extract_transactions.js # JS entry point and re-exports
-    common/                 # Shared JS utilities
+    common/                 # Shared JS utilities (output, liteparse, batch)
     banks/                  # Bank-specific JS extractors
     validate_parity.mjs     # Parity test script
 ```

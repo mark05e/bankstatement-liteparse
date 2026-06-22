@@ -140,6 +140,120 @@
     #status.loading { color: var(--mid-purple); }
     #status.success { color: #16a34a; }
     #status.error { color: #dc2626; }
+    #status.warning { color: var(--vibrant-orange); }
+
+    .drop-zone.disabled {
+      opacity: 0.55;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+
+    #batch-progress { display: none; margin-bottom: 1.5rem; }
+    #batch-progress.visible { display: block; }
+
+    .progress-wrap {
+      background: white;
+      border: 1px solid var(--light-grey);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--light-grey);
+      margin-bottom: 0.5rem;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--vibrant-blue), var(--mid-purple));
+      border-radius: 4px;
+      transition: width 0.2s ease;
+      width: 0%;
+    }
+
+    .progress-step {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--dark-grey);
+    }
+
+    .file-queue-hint {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--dark-grey);
+      margin-bottom: 0.5rem;
+    }
+
+    .file-queue {
+      list-style: none;
+      background: white;
+      border: 1px solid var(--light-grey);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--light-grey);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    .file-row:last-child { border-bottom: none; }
+
+    .file-row.selectable {
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .file-row.selectable:hover { background: var(--off-white); }
+    .file-row.active { background: #f0f0ff; }
+
+    .file-row .filename {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-badge {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .file-badge.pending { background: var(--light-grey); color: var(--dark-grey); }
+    .file-badge.reading,
+    .file-badge.parsing,
+    .file-badge.extracting { background: #e8ecff; color: var(--mid-purple); }
+    .file-badge.done { background: #dcfce7; color: #16a34a; }
+    .file-badge.error { background: #fee2e2; color: #dc2626; }
+
+    .viewing-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--dark-grey);
+      margin-bottom: 0.75rem;
+    }
+
+    .viewing-label strong { color: var(--black); font-weight: 500; }
+
+    .controls .batch-group {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
 
     .results { display: none; }
     .results.visible { display: block; }
@@ -314,25 +428,41 @@
   <main>
     <div class="hero">
       <h2>Extract Transactions from Bank Statement PDFs</h2>
-      <p>Everything runs 100% in your browser — your PDF never leaves your device. Drop a statement to parse and extract Transactions.</p>
+      <p>Everything runs 100% in your browser — your PDFs never leave your device. Drop one or more statements to parse and extract Transactions.</p>
       <p class="supported-banks"><strong>Supported banks:</strong> <span id="supported-banks-list"></span></p>
     </div>
 
     <div class="drop-zone" id="drop-zone">
-      <input type="file" id="pdf-input" accept=".pdf" />
+      <input type="file" id="pdf-input" accept=".pdf" multiple />
       <div class="drop-zone-text">
-        Drop a bank statement PDF to extract Transactions, or <strong>click to browse</strong>
+        Drop bank statement PDFs to extract Transactions, or <strong>click to browse</strong>
       </div>
     </div>
 
     <div id="status">Loading WASM module...</div>
 
+    <div id="batch-progress">
+      <div class="progress-wrap">
+        <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-step" id="progress-step"></div>
+      </div>
+      <p class="file-queue-hint" id="file-queue-hint" hidden>Click a PDF below to view its transactions.</p>
+      <ul class="file-queue" id="file-queue"></ul>
+    </div>
+
     <div class="results" id="results">
+      <div class="viewing-label" id="viewing-label" hidden></div>
       <div class="meta-bar" id="meta-bar"></div>
 
       <div class="controls">
         <button id="download-json" disabled>Download Transactions JSON</button>
         <button id="download-csv" disabled>Download Transactions CSV</button>
+        <div class="batch-group">
+          <button id="download-all-json" disabled>Download all JSON (ZIP)</button>
+          <button id="download-all-csv" disabled>Download all CSV (ZIP)</button>
+        </div>
         <span class="count" id="txn-count"></span>
       </div>
 
@@ -363,6 +493,7 @@
   <script type="module">
     import { extract, toCsv, listExtractors } from "./extract_transactions.js";
     import { liteparseResultToPages } from "./common/liteparse.js";
+    import { filterPdfFiles, resultFilename, buildZipBlob } from "./common/batch.js";
 
     const supportedBankNames = listExtractors().map((e) => e.name).join(", ");
     document.getElementById("supported-banks-list").textContent = supportedBankNames;
@@ -375,24 +506,44 @@
     const status = document.getElementById("status");
     const dropZone = document.getElementById("drop-zone");
     const fileInput = document.getElementById("pdf-input");
+    const batchProgress = document.getElementById("batch-progress");
+    const progressFill = document.getElementById("progress-fill");
+    const progressStep = document.getElementById("progress-step");
+    const fileQueue = document.getElementById("file-queue");
+    const fileQueueHint = document.getElementById("file-queue-hint");
     const results = document.getElementById("results");
+    const viewingLabel = document.getElementById("viewing-label");
     const metaBar = document.getElementById("meta-bar");
     const txnBody = document.getElementById("txn-body");
     const txnCount = document.getElementById("txn-count");
     const downloadJsonBtn = document.getElementById("download-json");
     const downloadCsvBtn = document.getElementById("download-csv");
+    const downloadAllJsonBtn = document.getElementById("download-all-json");
+    const downloadAllCsvBtn = document.getElementById("download-all-csv");
     const debugToggle = document.getElementById("debug-toggle");
     const debugOutput = document.getElementById("debug-output");
 
     let LiteParse = null;
-    let currentPayload = null;
-    let currentTransactions = null;
-    let currentRawResult = null;
+    let batchResults = [];
+    let selectedIndex = -1;
+    let batchRunning = false;
     let debugJsonRendered = false;
+
+    const PHASE_LABELS = {
+      reading: "Reading",
+      parsing: "Parsing",
+      extracting: "Extracting",
+    };
 
     function setStatus(msg, type) {
       status.textContent = msg;
       status.className = type || "";
+    }
+
+    function setBatchUiEnabled(enabled) {
+      dropZone.classList.toggle("disabled", !enabled);
+      fileInput.disabled = !enabled;
+      batchRunning = !enabled;
     }
 
     function formatAmount(amount) {
@@ -423,12 +574,6 @@
       txnCount.textContent = `${transactions.length} transaction${transactions.length === 1 ? "" : "s"}`;
     }
 
-    function enableDownloads(payload) {
-      currentPayload = payload;
-      downloadJsonBtn.disabled = false;
-      downloadCsvBtn.disabled = false;
-    }
-
     function renderMeta(payload) {
       metaBar.innerHTML = [
         metaItem("Account", payload.account_number || "—"),
@@ -452,7 +597,7 @@
     }
 
     function downloadBlob(content, filename, mimeType) {
-      const blob = new Blob([content], { type: mimeType });
+      const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -461,13 +606,7 @@
       URL.revokeObjectURL(url);
     }
 
-    async function processPdf(file) {
-      if (!LiteParse) {
-        setStatus("WASM module not loaded yet.", "error");
-        return;
-      }
-
-      setStatus(`Parsing "${file.name}"...`, "loading");
+    function resetDetailView() {
       results.classList.remove("visible");
       debugOutput.classList.remove("visible");
       debugToggle.textContent = "Show raw LiteParse JSON";
@@ -475,31 +614,206 @@
       debugOutput.textContent = "";
       downloadJsonBtn.disabled = true;
       downloadCsvBtn.disabled = true;
+      viewingLabel.hidden = true;
+    }
 
-      try {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const parser = new LiteParse({ ocrEnabled: false, outputFormat: "json", quiet: true });
-        const result = await parser.parse(bytes);
-        currentRawResult = result;
+    function successfulResults() {
+      return batchResults.filter((r) => r.status === "done");
+    }
 
-        setStatus("Extracting Transactions...", "loading");
-        const pages = liteparseResultToPages(result);
-        const { extractor, transactions, payload } = extract(pages);
-        payload.source = file.name;
-        currentTransactions = transactions;
+    function updateBatchDownloadButtons() {
+      const hasSuccess = successfulResults().length > 0;
+      downloadAllJsonBtn.disabled = !hasSuccess;
+      downloadAllCsvBtn.disabled = !hasSuccess;
+    }
 
-        renderMeta(payload);
-        renderTable(transactions);
-        enableDownloads(payload);
-        results.classList.add("visible");
+    function updateOverallProgress(completed, total) {
+      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+      progressFill.style.width = `${pct}%`;
+      progressFill.parentElement.setAttribute("aria-valuenow", String(pct));
+    }
+
+    function updateFileQueueHint() {
+      fileQueueHint.hidden = batchResults.length <= 1;
+    }
+
+    function badgeText(entry) {
+      if (entry.status === "done") {
+        const bank = entry.payload?.bank_name || "Unknown";
+        const count = entry.transactions?.length ?? 0;
+        return `${count} txn${count === 1 ? "" : "s"} · ${bank}`;
+      }
+      if (entry.status === "error") {
+        const msg = entry.error || "Failed";
+        return msg.length > 48 ? msg.slice(0, 45) + "…" : msg;
+      }
+      return PHASE_LABELS[entry.status] || entry.status;
+    }
+
+    function renderFileQueue() {
+      const fragment = document.createDocumentFragment();
+      for (let i = 0; i < batchResults.length; i++) {
+        const entry = batchResults[i];
+        const li = document.createElement("li");
+        li.className = "file-row";
+        li.dataset.index = String(i);
+        if (entry.status === "done") {
+          li.classList.add("selectable");
+          if (i === selectedIndex) li.classList.add("active");
+        }
+        li.innerHTML = `
+          <span class="filename" title="${escapeHtml(entry.file.name)}">${escapeHtml(entry.file.name)}</span>
+          <span class="file-badge ${escapeHtml(entry.status)}">${escapeHtml(badgeText(entry))}</span>
+        `;
+        if (entry.status === "done") {
+          li.addEventListener("click", () => selectFile(i));
+        }
+        fragment.appendChild(li);
+      }
+      fileQueue.replaceChildren(fragment);
+    }
+
+    function updateFileRow(index, phase, filename, total) {
+      if (batchResults[index]) {
+        batchResults[index].status = phase;
+      }
+      const phaseLabel = PHASE_LABELS[phase] || phase;
+      progressStep.textContent = total
+        ? `${phaseLabel} ${index + 1} of ${total}: ${filename}…`
+        : `${phaseLabel}: ${filename}…`;
+      renderFileQueue();
+    }
+
+    async function processSinglePdf(file, onPhase) {
+      onPhase?.("reading");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      onPhase?.("parsing");
+      const parser = new LiteParse({ ocrEnabled: false, outputFormat: "json", quiet: true });
+      const rawResult = await parser.parse(bytes);
+      onPhase?.("extracting");
+      const pages = liteparseResultToPages(rawResult);
+      const { extractor, transactions, payload } = extract(pages);
+      payload.source = file.name;
+      return { payload, transactions, rawResult, extractor };
+    }
+
+    function selectFile(index) {
+      const entry = batchResults[index];
+      if (!entry || entry.status !== "done") return;
+
+      selectedIndex = index;
+      renderFileQueue();
+
+      const showViewingLabel = batchResults.length > 1;
+      viewingLabel.hidden = !showViewingLabel;
+      if (showViewingLabel) {
+        viewingLabel.innerHTML = `Viewing: <strong>${escapeHtml(entry.file.name)}</strong>`;
+      }
+
+      debugOutput.classList.remove("visible");
+      debugToggle.textContent = "Show raw LiteParse JSON";
+      debugJsonRendered = false;
+      debugOutput.textContent = "";
+
+      renderMeta(entry.payload);
+      renderTable(entry.transactions);
+      downloadJsonBtn.disabled = false;
+      downloadCsvBtn.disabled = false;
+      results.classList.add("visible");
+    }
+
+    function initBatchQueue(pdfs) {
+      batchResults = pdfs.map((file, id) => ({
+        id,
+        file,
+        status: "pending",
+      }));
+      selectedIndex = -1;
+      batchProgress.classList.add("visible");
+      updateOverallProgress(0, pdfs.length);
+      progressStep.textContent = `Processing ${pdfs.length} file${pdfs.length === 1 ? "" : "s"}…`;
+      updateFileQueueHint();
+      renderFileQueue();
+      resetDetailView();
+      downloadAllJsonBtn.disabled = true;
+      downloadAllCsvBtn.disabled = true;
+    }
+
+    async function processFiles(fileList) {
+      if (!LiteParse) {
+        setStatus("WASM module not loaded yet.", "error");
+        return;
+      }
+      if (batchRunning) return;
+
+      const { pdfs, skipped } = filterPdfFiles(fileList);
+      if (pdfs.length === 0) {
+        setStatus("Please drop at least one PDF file.", "error");
+        return;
+      }
+
+      initBatchQueue(pdfs);
+      setBatchUiEnabled(false);
+
+      if (skipped > 0) {
         setStatus(
-          `Extracted ${transactions.length} transaction${transactions.length === 1 ? "" : "s"} (${extractor.name}) from ${result.pages.length} page(s)`,
+          `Skipped ${skipped} non-PDF file${skipped === 1 ? "" : "s"}. Processing ${pdfs.length} PDF${pdfs.length === 1 ? "" : "s"}…`,
+          "warning",
+        );
+      } else {
+        setStatus(`Processing ${pdfs.length} PDF${pdfs.length === 1 ? "" : "s"}…`, "loading");
+      }
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < pdfs.length; i++) {
+        const file = pdfs[i];
+        updateFileRow(i, "parsing", file.name, pdfs.length);
+        updateOverallProgress(i, pdfs.length);
+
+        await new Promise((r) => requestAnimationFrame(r));
+
+        try {
+          const result = await processSinglePdf(file, (phase) => {
+            updateFileRow(i, phase, file.name, pdfs.length);
+          });
+          batchResults[i] = { id: i, file, status: "done", ...result };
+          successCount++;
+        } catch (err) {
+          batchResults[i] = { id: i, file, status: "error", error: err.message };
+          errorCount++;
+          console.error(`Error processing ${file.name}:`, err);
+        }
+
+        updateOverallProgress(i + 1, pdfs.length);
+        renderFileQueue();
+      }
+
+      const firstSuccess = batchResults.findIndex((r) => r.status === "done");
+      if (firstSuccess >= 0) {
+        selectFile(firstSuccess);
+      }
+
+      updateBatchDownloadButtons();
+      setBatchUiEnabled(true);
+      fileInput.value = "";
+
+      if (errorCount === 0) {
+        setStatus(
+          `Done — extracted transactions from ${successCount} file${successCount === 1 ? "" : "s"}.`,
           "success",
         );
-      } catch (err) {
-        setStatus("Error: " + err.message, "error");
-        console.error(err);
+      } else if (successCount === 0) {
+        setStatus(`All ${errorCount} file${errorCount === 1 ? "" : "s"} failed.`, "error");
+      } else {
+        setStatus(
+          `Done — ${successCount} succeeded, ${errorCount} failed. Click a file to view results.`,
+          "warning",
+        );
       }
+
+      progressStep.textContent = `Complete — ${successCount} of ${pdfs.length} succeeded`;
     }
 
     // --- Load WASM from CDN ---
@@ -511,7 +825,7 @@
         "https://cdn.jsdelivr.net/npm/@llamaindex/liteparse-wasm@2.1/pkg/liteparse_wasm_bg.wasm"
       );
       LiteParse = mod.LiteParse;
-      setStatus("Ready. Drop a bank statement PDF to extract Transactions.", "success");
+      setStatus("Ready. Drop bank statement PDFs to extract Transactions.", "success");
     } catch (err) {
       setStatus("Failed to load WASM module: " + err.message, "error");
       console.error(err);
@@ -519,7 +833,7 @@
 
     dropZone.addEventListener("dragover", (e) => {
       e.preventDefault();
-      dropZone.classList.add("dragover");
+      if (!batchRunning) dropZone.classList.add("dragover");
     });
 
     dropZone.addEventListener("dragleave", () => {
@@ -529,35 +843,71 @@
     dropZone.addEventListener("drop", (e) => {
       e.preventDefault();
       dropZone.classList.remove("dragover");
-      const file = e.dataTransfer.files[0];
-      if (file && file.type === "application/pdf") {
-        processPdf(file);
-      } else {
-        setStatus("Please drop a PDF file.", "error");
+      if (batchRunning) return;
+      if (e.dataTransfer.files.length > 0) {
+        processFiles(e.dataTransfer.files);
       }
     });
 
     fileInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (file) processPdf(file);
+      if (e.target.files.length > 0) processFiles(e.target.files);
     });
 
     downloadJsonBtn.addEventListener("click", () => {
-      if (!currentPayload) return;
-      const name = currentPayload.source.replace(/\.pdf$/i, ".transactions.json");
-      downloadBlob(JSON.stringify(currentPayload, null, 2) + "\n", name, "application/json");
+      const entry = batchResults[selectedIndex];
+      if (!entry?.payload) return;
+      const name = resultFilename(entry.payload.source, "transactions.json");
+      downloadBlob(JSON.stringify(entry.payload, null, 2) + "\n", name, "application/json");
     });
 
     downloadCsvBtn.addEventListener("click", () => {
-      if (!currentTransactions) return;
-      const name = currentPayload.source.replace(/\.pdf$/i, ".transactions.csv");
-      downloadBlob(toCsv(currentTransactions), name, "text/csv");
+      const entry = batchResults[selectedIndex];
+      if (!entry?.transactions) return;
+      const name = resultFilename(entry.file.name, "transactions.csv");
+      downloadBlob(toCsv(entry.transactions), name, "text/csv");
+    });
+
+    downloadAllJsonBtn.addEventListener("click", async () => {
+      const entries = successfulResults().map((r) => ({
+        filename: resultFilename(r.file.name, "transactions.json"),
+        content: JSON.stringify(r.payload, null, 2) + "\n",
+      }));
+      if (entries.length === 0) return;
+      downloadAllJsonBtn.disabled = true;
+      try {
+        const blob = await buildZipBlob(entries);
+        downloadBlob(blob, "bank-statements-transactions-json.zip", "application/zip");
+      } catch (err) {
+        setStatus("ZIP error: " + err.message, "error");
+        console.error(err);
+      } finally {
+        downloadAllJsonBtn.disabled = false;
+      }
+    });
+
+    downloadAllCsvBtn.addEventListener("click", async () => {
+      const entries = successfulResults().map((r) => ({
+        filename: resultFilename(r.file.name, "transactions.csv"),
+        content: toCsv(r.transactions),
+      }));
+      if (entries.length === 0) return;
+      downloadAllCsvBtn.disabled = true;
+      try {
+        const blob = await buildZipBlob(entries);
+        downloadBlob(blob, "bank-statements-transactions-csv.zip", "application/zip");
+      } catch (err) {
+        setStatus("ZIP error: " + err.message, "error");
+        console.error(err);
+      } finally {
+        downloadAllCsvBtn.disabled = false;
+      }
     });
 
     debugToggle.addEventListener("click", () => {
+      const entry = batchResults[selectedIndex];
       const visible = debugOutput.classList.toggle("visible");
-      if (visible && !debugJsonRendered && currentRawResult) {
-        debugOutput.textContent = JSON.stringify(currentRawResult, null, 2);
+      if (visible && !debugJsonRendered && entry?.rawResult) {
+        debugOutput.textContent = JSON.stringify(entry.rawResult, null, 2);
         debugJsonRendered = true;
       }
       debugToggle.textContent = visible ? "Hide raw LiteParse JSON" : "Show raw LiteParse JSON";
