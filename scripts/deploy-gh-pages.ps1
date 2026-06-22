@@ -7,7 +7,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
 if (-not (Test-Path "src/web/index.html")) {
-    throw "Expected src/web/index.html — run this script from the repository root."
+    throw "Expected src/web/index.html - run this script from the repository root."
 }
 
 Write-Host "Pushing src/web to origin/gh-pages via git subtree..."

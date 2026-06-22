@@ -7,7 +7,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
 if [[ ! -f src/web/index.html ]]; then
-  echo "Expected src/web/index.html — run this script from the repository root." >&2
+  echo "Expected src/web/index.html - run this script from the repository root." >&2
   exit 1
 fi
 
